@@ -1,15 +1,15 @@
 import * as tf from '@tensorflow/tfjs';
 
-async function trinarModelo(inputXs, outputYs) {
+async function treinarModelo(inputXs, outputYs) {
     // Criamos o modelo sequencial
-    const model = tf.sequential(); 
-    
+    const model = tf.sequential();
+
     //Primeira camada de rede
     // entrada de 7 posicoes (idade, cor e localização) e saída de 10 posicoes
-    model.add(tf.layers.dense({inputShape: [7], units: 80, activation: 'relu'})); // Camada de entrada
+    model.add(tf.layers.dense({ inputShape: [7], units: 80, activation: 'relu' })); // Camada de entrada
 
     //saida da primeira camada de 80 posicoes e entrada da segunda camada de 80 posicoes
-    model.add(tf.layers.dense({units: 3, activation: 'softmax'})); // Camada de saída
+    model.add(tf.layers.dense({ units: 3, activation: 'softmax' })); // Camada de saída
 
     // Compilamos o modelo
     // Otimizador Adam, função de perda categoricalCrossentropy e métrica de acurácia
@@ -29,7 +29,12 @@ async function trinarModelo(inputXs, outputYs) {
         shuffle: true, // Embaralha os dados a cada época para melhorar a generalização do modelo
         callbacks: {
             onEpochEnd: (epoch, logs) => {
-                console.log(`Epoch ${epoch + 1}: loss = ${logs.loss.toFixed(4)}, accuracy = ${logs.acc.toFixed(4)}`);
+                const accuracy = logs.accuracy ?? logs.acc ?? 0;
+
+                console.log(
+                    `Epoch ${epoch + 1}: loss = ${logs.loss.toFixed(4)}, ` +
+                    `accuracy = ${accuracy.toFixed(4)}`
+                );
             }
         }
     });
@@ -76,7 +81,42 @@ const outputYs = tf.tensor2d(tensorLabels)
 // Treinamos o modelo com os dados de entrada e saída
 // O modelo é retornado após o treinamento
 //quanto mais dados de entrada e saída, melhor será o modelo treinado
-const model = trinarModelo(inputXs, outputYs);
+const model = await treinarModelo(inputXs, outputYs);
 
+async function predict(model, pessoa) {
+    // Normalizamos os dados de entrada da pessoa para fazer a previsão
+    const tfInput = tf.tensor2d(pessoa)
+    const pred = model.predict(tfInput)
+    const predArray = await pred.array()
+    return predArray[0].map((prop, index) => ({
+        categoria: labelsNomes[index],
+        probabilidade: prop
+    }));
+}
+
+const pessoa = { nome: "João", idade: 28, cor: "verde", localizacao: "Curitiba" };
+
+// Normalizamos os dados de entrada da pessoa para fazer a previsão
+//exemplo: idade_min = 25, idade_max = 40, então (28 - 25) / (40 - 25) = 0.2
+const pessoaTensorNormalizado = [
+    [0.2, // Idade normalizada
+        0, // cor azul
+        0, // cor vermelho
+        1, // cor verde
+        0, // Localização São Paulo
+        0, // Localização Rio
+        1 // localização Curitiba
+    ]
+]
+
+
+
+const predictions = await predict(model, pessoaTensorNormalizado);
+const resultados = predictions
+    .sort((a, b) => b.probabilidade - a.probabilidade)
+    .map(pred =>
+        `${labelsNomes[pred.index]} (${(pred.probabilidade * 100).toFixed(2)}%)`
+    );
+console.log(resultados); // Exibe as categorias previstas com suas respectivas probabilidades
 //inputXs.print();
-//outputYs.print();
+//outputYs.print()
